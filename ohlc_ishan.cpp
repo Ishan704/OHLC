@@ -487,7 +487,7 @@ void update_ohlc(const ParsedData &data)
     std::tm *time_info = std::localtime(&seconds);
     std::ostringstream time_stream;
     time_stream << std::put_time(time_info, "%H:%M:%S");
-    cout << "| Call process_token_data at: " << std::setw(5) << time_stream.str() << endl;
+    // cout << "| Call process_token_data at: " << std::setw(5) << time_stream.str() << endl;
     process_token_data(data.token, data.price, data.quantity, data.epoch_time, data.exchange_ordernumber1, data.exchange_ordernumber2);
 }
 
@@ -519,7 +519,7 @@ void consumer()
         {
 
             // cout << "Consumer---------------------------" << "\n";
-            if (data.order_traded_type == 'T' && data.token == 22)
+            if (data.order_traded_type == 'T')
             {
                 update_ohlc(data);
             }
