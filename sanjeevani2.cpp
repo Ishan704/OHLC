@@ -436,7 +436,7 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
         openclose[token][epoch_second].push(entry);
         
         static std::unordered_map<int, long long> last_print_second;
-        if (epoch_second != last_print_second[token]) 
+        if (epoch_second > last_print_second[token]) 
         {
             while (!logQueue[token][last_print_second[token]].empty()) 
             {
