@@ -263,11 +263,31 @@ void find_stick(int token, const OHLCData &ohlc, uint64_t epoch_second, uint64_t
     threadSafeCache.set(cache_key, stick_type);
 }
 
+std::string get_current_epoch_time_hhmmss() {
+    // Get the current time in seconds since epoch
+    auto now = std::chrono::system_clock::now();
+    auto epoch_seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+
+    // Convert epoch seconds to time structure
+    std::time_t time = static_cast<std::time_t>(epoch_seconds);
+    std::tm* tm_info = std::localtime(&time); // Local time for current epoch time
+
+    // Format the time into hh:mm:ss format
+    std::ostringstream oss;
+    oss << std::put_time(tm_info, "%H:%M:%S");  // hhmmss format
+
+    return oss.str();
+}
+
 std::unordered_map<int, std::map<long long, std::queue<std::string>>> logQueue;
 std::unordered_map<int, std::map<long long, std::pair<double, double>>> highLowValues;
 void process_token_data(int token, double price, double quantity, uint64_t epoch_microseconds, uint64_t exchange_ordernumber1, uint64_t exchange_ordernumber2)
 {
     uint64_t epoch_second = epoch_microseconds / 1000000; // Convert to seconds
+    auto now = chrono::system_clock::now();
+    uint64_t current_epoch_second = std::chrono::duration_cast<std::chrono::seconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
     auto &ohlc = currentOHLC[token];                      // Reference to the current OHLC data for this token
 
     // Update OHLC data
@@ -376,7 +396,7 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
     std::ostringstream output;
     output << std::left
            << "Tok.: " << std::setw(5) << token
-           << "| Time: " << std::setw(5) << time_stream.str()
+           << "| Time: " << std::setw(5) << get_current_epoch_time_hhmmss()
            << "| TotVol.: " << std::setw(5) << tot_info.total_volume
            << "| BuyerVol.: " << std::setw(5) << buyer_info.buyer_volume
            << "| SellerVol.: " << std::setw(5) << seller_info.seller_volume
@@ -409,39 +429,23 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
 
     // Static variable to track the last printed second for each token
     static std::unordered_map<int, long long> last_print_second;
-    if (epoch_second != last_print_second[token])
+    if ( epoch_second != last_print_second[token])
     {
-        while (!logQueue[token][epoch_second].empty())
-        {
-            auto first_entry = openclose[token][epoch_second].front();
-            auto last_entry = openclose[token][epoch_second].back();
-            
-            std::ostringstream finalOutput;
-            finalOutput << logQueue[token][epoch_second].front()  // Print the first entry
-                        << "| O: " << std::setw(8) << first_entry.first
-                        << "| H: " << std::setw(8) << highLowValues[token][epoch_second].first
-                        << "| L: " << std::setw(8) << highLowValues[token][epoch_second].second
-                        << "| C: " << std::setw(8) << last_entry.second;
-            
-            std::cout << finalOutput.str() << std::endl;
 
-            // Remove the printed log entry to keep the queue updated
-            logQueue[token][epoch_second].pop();
-        }
         // Print last entry of the queue for the last second for this token
-        // if (!logQueue[token][last_print_second[token]].empty())
-        // {
-        //     auto first_entry = openclose[token][last_print_second[token]].front();
-        //     auto last_entry = openclose[token][last_print_second[token]].back();
-        //     std::ostringstream finalOutput;
-        //     finalOutput << logQueue[token][last_print_second[token]].back()
-        //                 << "| O: " << std::setw(8) << first_entry.first
-        //                 << "| H: " << std::setw(8) << highLowValues[token][last_print_second[token]].first
-        //                 << "| L: " << std::setw(8) << highLowValues[token][last_print_second[token]].second
-        //                 << "| C: " << std::setw(8) << last_entry.second;
-        //     std::cout << finalOutput.str() << std::endl;
-        //     logQueue[token][last_print_second[token]].pop();
-        // }
+        if (current_epoch_second > last_print_second[token] && !logQueue[token][last_print_second[token]].empty())
+        {
+            auto first_entry = openclose[token][last_print_second[token]].front();
+            auto last_entry = openclose[token][last_print_second[token]].back();
+            std::ostringstream finalOutput;
+            finalOutput << logQueue[token][last_print_second[token]].back()
+                        << "| O: " << std::setw(8) << first_entry.first
+                        << "| H: " << std::setw(8) << highLowValues[token][last_print_second[token]].first
+                        << "| L: " << std::setw(8) << highLowValues[token][last_print_second[token]].second
+                        << "| C: " << std::setw(8) << last_entry.second;
+            std::cout << finalOutput.str() << std::endl;
+            logQueue[token][last_print_second[token]].pop();
+        }
 
         // Update last print second for this token
         last_print_second[token] = epoch_second;
@@ -498,13 +502,8 @@ void producer(const std::string &file_path)
 
 void update_ohlc(const ParsedData &data)
 {
-    uint64_t log_time = (data.epoch_time / 1000000 * 1000000) + 1000; // Align to the nearest second
-    std::time_t seconds = static_cast<std::time_t>(log_time / 1000000);
-    std::tm *time_info = std::localtime(&seconds);
-    std::ostringstream time_stream;
-    time_stream << std::put_time(time_info, "%H:%M:%S");
-    //cout << "| Call process_token_data at: " << std::setw(5) << time_stream.str() << endl;
     process_token_data(data.token, data.price, data.quantity, data.epoch_time, data.exchange_ordernumber1, data.exchange_ordernumber2);
+  
 }
 
 void update_bsstick(const ParsedData &data)
@@ -515,34 +514,56 @@ void update_bsstick(const ParsedData &data)
 
 void consumer()
 {
+    std::vector<ParsedData> batch;
+    std::time_t last_processed_second = 0;
 
     while (true)
     {
         unique_lock<mutex> lock(queuemutex);
-
         cv.wait(lock, []
                 { return dataQueue.size() > 0; });
-        std::vector<ParsedData> batch;
+        
         // cout << "Queue size=" << dataQueue.size() << "\n";
         while (!dataQueue.empty())
         {
             // Adjust batch size as needed
-            batch.push_back(dataQueue.front());
+            ParsedData data = dataQueue.front();
             dataQueue.pop();
-        }
-        // cout << "Batch size is=" << batch.size() << "\n";
-        for (const auto &data : batch)
-        {
 
-            // cout << "Consumer---------------------------" << "\n";
-            if (data.order_traded_type == 'T' )
+            std::time_t trade_second = data.epoch_time;
+            if (last_processed_second == 0)
             {
-                update_ohlc(data);
+                last_processed_second = trade_second; 
             }
-            else if (data.order_traded_type == 'N' || data.order_traded_type == 'M')
+            if (trade_second > last_processed_second)
             {
-                update_bsstick(data);
+                // Process all stored trades for the previous second
+                if (!batch.empty())
+                {
+                    //cout << "\nProcessing trades for second: " << get_current_epoch_time_hhmmss() << endl;
+
+                    // cout << "Batch size is=" << batch.size() << "\n";
+                    for (const auto &data : batch)
+                    {
+
+                        // cout << "Consumer---------------------------" << "\n";
+                        if (data.order_traded_type == 'T')
+                        {
+                            update_ohlc(data);
+
+                        }
+                        else if (data.order_traded_type == 'N' || data.order_traded_type == 'M')
+                        {
+                            update_bsstick(data);
+                        }
+                    }
+                    
+                    batch.clear();
+                }
+                last_processed_second = trade_second;
             }
+            // Add current trade to the batch
+            batch.push_back(data);
         }
 
         lock.unlock();
