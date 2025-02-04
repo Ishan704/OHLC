@@ -436,7 +436,7 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
 
         // Static variable to track the last printed second for each token
         static std::unordered_map<int, long long> last_print_second;
-        if ( epoch_second != last_print_second[token])
+        if ( current_epoch_second > last_print_second[token])
         {
 
             // Print last entry of the queue for the last second for this token
