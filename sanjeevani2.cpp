@@ -412,7 +412,8 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
         }
     }
 
-    if(get_current_epoch_time_hhmmss() > time_stream.str())
+    //cout<<"\n"<<"trade_sec : " << time_stream.str() <<" | current_sec : " << get_current_epoch_time_hhmmss();
+    if (epoch_second == current_epoch_second) 
     {
         std::ostringstream output;
         output << std::left
@@ -422,50 +423,48 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
             << "| TotVol.: " << std::setw(5) << tot_info.total_volume
             << "| BuyerVol.: " << std::setw(5) << buyer_info.buyer_volume
             << "| SellerVol.: " << std::setw(5) << seller_info.seller_volume
-            << "| Stick: " << (final_stick == 'B' ? "B" : final_stick == 'S' ? "S"
-                                                                                : "D")
+            << "| Stick: " << (final_stick == 'B' ? "B" : final_stick == 'S' ? "S" : "D")
             << "| BuyCtr: " << std::setw(5) << buycounter
             << "| SellCtr: " << std::setw(5) << sellcounter
             << "| BuyVal: " << std::setw(8) << buyvalue
             << "| SellVal: " << std::setw(8) << sellvalue;
-     
-            logQueue[token][epoch_second].push(output.str());
-        // Add entry to the queue for the current token and second
+
+        logQueue[token][epoch_second].push(output.str());
+        
         std::pair<double, double> entry(ohlc.open, ohlc.close);
         openclose[token][epoch_second].push(entry);
-
-        // Static variable to track the last printed second for each token
+        
         static std::unordered_map<int, long long> last_print_second;
-        if ( current_epoch_second  == epoch_second && epoch_second!= last_print_second[token])
+        if (epoch_second != last_print_second[token]) 
         {
-
-            // Print last entry of the queue for the last second for this token
             if (!logQueue[token][last_print_second[token]].empty())
             {
-                auto first_entry = openclose[token][last_print_second[token]].front();
-                auto last_entry = openclose[token][last_print_second[token]].back();
-                std::ostringstream finalOutput;
-                finalOutput << logQueue[token][last_print_second[token]].back()
-                            << "| O: " << std::setw(8) << first_entry.first
-                            << "| H: " << std::setw(8) << highLowValues[token][last_print_second[token]].first
-                            << "| L: " << std::setw(8) << highLowValues[token][last_print_second[token]].second
-                            << "| C: " << std::setw(8) << last_entry.second;
-                std::cout << finalOutput.str() << std::endl;
-                logQueue[token][last_print_second[token]].pop();
+                // Print **all** trades for that second
+                while (!logQueue[token][last_print_second[token]].empty()) 
+                {
+                    std::ostringstream finalOutput;
+                    auto first_entry = openclose[token][last_print_second[token]].front();
+                    auto last_entry = openclose[token][last_print_second[token]].back();
+
+                    finalOutput << logQueue[token][last_print_second[token]].front()  // Print first in queue
+                                << "| O: " << std::setw(8) << first_entry.first
+                                << "| H: " << std::setw(8) << highLowValues[token][last_print_second[token]].first
+                                << "| L: " << std::setw(8) << highLowValues[token][last_print_second[token]].second
+                                << "| C: " << std::setw(8) << last_entry.second;
+                    
+                    std::cout << finalOutput.str() << std::endl;
+                    logQueue[token][last_print_second[token]].pop();  // Remove after printing
+                }
             }
 
-            // Update last print second for this token
-            last_print_second[token] = epoch_second;
+            last_print_second[token] = epoch_second; // Update last printed second
             buycounter = 0;
             sellcounter = 0;
-            sellvalue = 0;
             buyvalue = 0;
+            sellvalue = 0;
         }
-
     }
 
-    
-    // Reset OHLC data for this token after processing
     ohlc = OHLCData();
 }
 
