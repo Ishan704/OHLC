@@ -436,7 +436,7 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
 
         // Static variable to track the last printed second for each token
         static std::unordered_map<int, long long> last_print_second;
-        if ( current_epoch_second > last_print_second[token])
+        if ( current_epoch_second  == epoch_second && epoch_second!= last_print_second[token])
         {
 
             // Print last entry of the queue for the last second for this token
@@ -524,56 +524,33 @@ void update_bsstick(const ParsedData &data)
 
 void consumer()
 {
-    std::vector<ParsedData> batch;
-    std::time_t last_processed_second = 0;
-
     while (true)
     {
         unique_lock<mutex> lock(queuemutex);
+
         cv.wait(lock, []
                 { return dataQueue.size() > 0; });
-        
+        std::vector<ParsedData> batch;
         // cout << "Queue size=" << dataQueue.size() << "\n";
         while (!dataQueue.empty())
         {
             // Adjust batch size as needed
-            ParsedData data = dataQueue.front();
+            batch.push_back(dataQueue.front());
             dataQueue.pop();
+        }
+        // cout << "Batch size is=" << batch.size() << "\n";
+        for (const auto &data : batch)
+        {
 
-            std::time_t trade_second = data.epoch_time;
-            if (last_processed_second == 0)
+            // cout << "Consumer---------------------------" << "\n";
+            if (data.order_traded_type == 'T')
             {
-                last_processed_second = trade_second; 
+                update_ohlc(data);
             }
-            if (trade_second > last_processed_second)
+            else if (data.order_traded_type == 'N' || data.order_traded_type == 'M')
             {
-                // Process all stored trades for the previous second
-                if (!batch.empty())
-                {
-                    //cout << "\nProcessing trades for second: " << get_current_epoch_time_hhmmss() << endl;
-
-                    // cout << "Batch size is=" << batch.size() << "\n";
-                    for (const auto &data : batch)
-                    {
-
-                        // cout << "Consumer---------------------------" << "\n";
-                        if (data.order_traded_type == 'T')
-                        {
-                            update_ohlc(data);
-
-                        }
-                        else if (data.order_traded_type == 'N' || data.order_traded_type == 'M')
-                        {
-                            update_bsstick(data);
-                        }
-                    }
-                    
-                    batch.clear();
-                }
-                last_processed_second = trade_second;
+                update_bsstick(data);
             }
-            // Add current trade to the batch
-            batch.push_back(data);
         }
 
         lock.unlock();
