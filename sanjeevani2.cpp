@@ -283,7 +283,7 @@ std::unordered_map<int, std::map<long long, std::queue<std::string>>> logQueue;
 std::unordered_map<int, std::map<long long, std::pair<double, double>>> highLowValues;
 void process_token_data(int token, double price, double quantity, uint64_t epoch_microseconds, uint64_t exchange_ordernumber1, uint64_t exchange_ordernumber2)
 {
-    uint64_t epoch_second = epoch_microseconds / 1000000; // Convert to seconds
+    uint64_t epoch_second = epoch_microseconds / 1000000;
     auto now = chrono::system_clock::now();
     uint64_t current_epoch_second = std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch())
@@ -306,6 +306,7 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
     }
     ohlc.close = price;
     ohlc.total_volume += quantity;
+
     // Determine buyer/seller stick type
     char buyerSellerStick = '\0';
     find_stick(token, ohlc, epoch_second, exchange_ordernumber1, exchange_ordernumber2, buyerSellerStick);
@@ -437,26 +438,21 @@ void process_token_data(int token, double price, double quantity, uint64_t epoch
         static std::unordered_map<int, long long> last_print_second;
         if (epoch_second != last_print_second[token]) 
         {
-            if (!logQueue[token][last_print_second[token]].empty())
+            while (!logQueue[token][last_print_second[token]].empty()) 
             {
-                // Print **all** trades for that second
-                while (!logQueue[token][last_print_second[token]].empty()) 
-                {
-                    std::ostringstream finalOutput;
-                    auto first_entry = openclose[token][last_print_second[token]].front();
-                    auto last_entry = openclose[token][last_print_second[token]].back();
+                std::ostringstream finalOutput;
+                auto first_entry = openclose[token][last_print_second[token]].front();
+                auto last_entry = openclose[token][last_print_second[token]].back();
 
-                    finalOutput << logQueue[token][last_print_second[token]].front()  // Print first in queue
-                                << "| O: " << std::setw(8) << first_entry.first
-                                << "| H: " << std::setw(8) << highLowValues[token][last_print_second[token]].first
-                                << "| L: " << std::setw(8) << highLowValues[token][last_print_second[token]].second
-                                << "| C: " << std::setw(8) << last_entry.second;
-                    
-                    std::cout << finalOutput.str() << std::endl;
-                    logQueue[token][last_print_second[token]].pop();  // Remove after printing
-                }
-            }
-
+                finalOutput << logQueue[token][last_print_second[token]].front()  // Print first in queue
+                            << "| O: " << std::setw(8) << first_entry.first
+                            << "| H: " << std::setw(8) << highLowValues[token][last_print_second[token]].first
+                            << "| L: " << std::setw(8) << highLowValues[token][last_print_second[token]].second
+                            << "| C: " << std::setw(8) << last_entry.second;
+                
+                std::cout << finalOutput.str() << std::endl;
+                logQueue[token][last_print_second[token]].pop();  // Remove after printing
+            }            
             last_print_second[token] = epoch_second; // Update last printed second
             buycounter = 0;
             sellcounter = 0;
